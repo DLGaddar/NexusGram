@@ -1,0 +1,6 @@
+@NexusGram_HostAddress = http://localhost:5250
+
+GET {{NexusGram_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
