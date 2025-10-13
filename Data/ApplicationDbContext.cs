@@ -15,6 +15,7 @@ namespace NexusGram.Data
         public DbSet<Story> Stories { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         
+        
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // User configuration

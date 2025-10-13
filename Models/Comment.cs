@@ -11,6 +11,7 @@ namespace NexusGram.Models
         public int UserId { get; set; }
         public int PostId { get; set; }
         public int? ParentCommentId { get; set; } // For replies
+        public string Title { get; set; } = string.Empty;
         
         // Navigation properties
         public User User { get; set; } = null!;

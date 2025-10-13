@@ -171,3 +171,4 @@ D:\source\NexusGram\obj\Debug\net9.0\ref\NexusGram.dll
 D:\source\NexusGram\bin\Debug\net9.0\Swashbuckle.AspNetCore.Annotations.dll
 D:\source\NexusGram\bin\Debug\net9.0\Newtonsoft.Json.dll
 D:\source\NexusGram\bin\Debug\net9.0\System.Net.WebSockets.WebSocketProtocol.dll
+D:\source\NexusGram\obj\Debug\net9.0\NexusGram.sourcelink.json
