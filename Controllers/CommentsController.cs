@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NexusGram.Services;
+using NexusGram.DTOs;
 using System.Security.Claims;
 
 namespace NexusGram.Controllers
@@ -18,41 +19,40 @@ namespace NexusGram.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult> AddComment(int postId, [FromBody] AddCommentRequest request)
+        public async Task<ActionResult<DTOs.CommentResponse>> AddComment(int postId, [FromBody] AddCommentRequest request) // 🔥 Açıkça DTOs.CommentResponse
         {
             try
             {
                 var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-                var comment = await _commentService.AddCommentAsync(userId, postId, request.Content, request.ParentCommentId);
-                
-                var response = new CommentResponse
-                {
-                    Id = comment.Id,
-                    Content = comment.Content,
-                    CreatedAt = comment.CreatedAt,
-                    UserId = comment.UserId,
-                    ParentCommentId = comment.ParentCommentId
-                };
+                if (userId == 0)
+                    return Unauthorized();
 
-                return Ok(response);
+                var comment = await _commentService.AddCommentAsync(userId, postId, request.Content, request.ParentCommentId);
+                return Ok(comment);
             }
-            catch (Exception ex)
+            catch (ArgumentException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { message = "An error occurred while adding comment" });
             }
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<CommentResponse>>> GetComments(int postId)
+        [AllowAnonymous]
+        public async Task<ActionResult<List<DTOs.CommentResponse>>> GetComments(int postId) // 🔥 Açıkça DTOs.CommentResponse
         {
             try
             {
-                var comments = await _commentService.GetCommentsByPostAsync(postId);
+                var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var comments = await _commentService.GetCommentsByPostAsync(postId, currentUserId != null ? int.Parse(currentUserId) : (int?)null);
                 return Ok(comments);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return BadRequest(new { message = ex.Message });
+                return StatusCode(500, new { message = "An error occurred while retrieving comments" });
             }
         }
 
@@ -62,6 +62,9 @@ namespace NexusGram.Controllers
             try
             {
                 var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (userId == 0)
+                    return Unauthorized();
+
                 var result = await _commentService.DeleteCommentAsync(commentId, userId);
 
                 if (!result)
@@ -69,16 +72,56 @@ namespace NexusGram.Controllers
 
                 return Ok(new { message = "Comment deleted successfully" });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return BadRequest(new { message = ex.Message });
+                return StatusCode(500, new { message = "An error occurred while deleting comment" });
             }
         }
-    }
 
-    public class AddCommentRequest
-    {
-        public string Content { get; set; } = string.Empty;
-        public int? ParentCommentId { get; set; }
+        [HttpPost("{commentId}/like")]
+        public async Task<ActionResult> LikeComment(int postId, int commentId)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (userId == 0)
+                    return Unauthorized();
+
+                var result = await _commentService.LikeCommentAsync(commentId, userId);
+
+                if (!result)
+                    return BadRequest(new { message = "Comment already liked" });
+
+                var likeCount = await _commentService.GetCommentLikeCountAsync(commentId);
+                return Ok(new { likeCount, message = "Comment liked successfully" });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { message = "An error occurred while liking comment" });
+            }
+        }
+
+        [HttpDelete("{commentId}/like")]
+        public async Task<ActionResult> UnlikeComment(int postId, int commentId)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                if (userId == 0)
+                    return Unauthorized();
+
+                var result = await _commentService.UnlikeCommentAsync(commentId, userId);
+
+                if (!result)
+                    return BadRequest(new { message = "Comment not liked" });
+
+                var likeCount = await _commentService.GetCommentLikeCountAsync(commentId);
+                return Ok(new { likeCount, message = "Comment unliked successfully" });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { message = "An error occurred while unliking comment" });
+            }
+        }
     }
 }

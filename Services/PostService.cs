@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using NexusGram.Data;
 using NexusGram.Models;
 using NexusGram.DTOs;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
 
 namespace NexusGram.Services
 {
@@ -9,11 +12,13 @@ namespace NexusGram.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public PostService(ApplicationDbContext context, IWebHostEnvironment environment)
+        public PostService(ApplicationDbContext context, IWebHostEnvironment environment, IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _environment = environment;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<Post> CreatePostAsync(int userId, CreatePostRequest request, IFormFile image)
@@ -60,24 +65,33 @@ namespace NexusGram.Services
             return post;
         }
 
-        public async Task<List<PostResponse>> GetFeedAsync(int userId)
+        public async Task<List<PostResponse>> GetFeedAsync(int userId, int page, int pageSize) 
         {
-            // ✅ FEED ALGORİTMASI: Takip edilen kişilerin postları + kendi postları
+            // Input kontrolü eklenmesi iyi bir pratik.
+            if (page < 1) page = 1; 
+            if (pageSize < 1) pageSize = 10; // Varsayılan değer
+        
             var followingIds = await _context.Follows
                 .Where(f => f.FollowerId == userId)
                 .Select(f => f.FollowingId)
                 .ToListAsync();
-
+        
             var postIds = followingIds.Append(userId).ToList();
-
+        
             var posts = await _context.Posts
                 .Where(p => postIds.Contains(p.UserId))
                 .Include(p => p.User)
                 .Include(p => p.Likes)
                 .Include(p => p.Comments)
                 .OrderByDescending(p => p.CreatedAt)
+                
+                // 🚨 KRİTİK SAYFALAMA MANTIĞI EKLENDİ
+                .Skip((page - 1) * pageSize) 
+                .Take(pageSize) 
+                
                 .Select(p => new PostResponse
                 {
+                    // ... (Mevcut eşleme mantığınız)
                     Id = p.Id,
                     ImageUrl = p.ImageUrl,
                     Caption = p.Caption,
@@ -87,15 +101,17 @@ namespace NexusGram.Services
                     Username = p.User.Username,
                     ProfilePicture = p.User.ProfilePicture,
                     LikeCount = p.Likes.Count,
-                    CommentCount = p.Comments.Count
+                    CommentCount = p.Comments.Count,
+                    IsLiked = p.Likes.Any(like => like.UserId == userId)
                 })
                 .ToListAsync();
-
+        
             return posts;
         }
 
         public async Task<PostResponse> GetPostAsync(int postId)
         {
+            var userId = int.Parse(_httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
             var post = await _context.Posts
                 .Include(p => p.User)
                 .Include(p => p.Likes)
@@ -116,7 +132,8 @@ namespace NexusGram.Services
                 Username = post.User.Username,
                 ProfilePicture = post.User.ProfilePicture,
                 LikeCount = post.Likes.Count,
-                CommentCount = post.Comments.Count
+                CommentCount = post.Comments.Count,
+                IsLiked = post.Likes.Any(like => like.UserId == userId)
             };
         }
 

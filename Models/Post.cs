@@ -13,8 +13,8 @@ namespace NexusGram.Models
         public int UserId { get; set; }
         
         // Navigation properties
-        public User User { get; set; } = null!;
-        public List<Like> Likes { get; set; } = new();
-        public List<Comment> Comments { get; set; } = new();
+        public virtual User User { get; set; } = null!;
+        public virtual ICollection<Comment> Comments { get; set; } = new List<Comment>();
+        public virtual ICollection<Like> Likes { get; set; } = new List<Like>();
     }
 }

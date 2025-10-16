@@ -7,16 +7,14 @@ namespace NexusGram.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         
-        // Foreign keys
         public int UserId { get; set; }
         public int PostId { get; set; }
-        public int? ParentCommentId { get; set; } // For replies
-        public string Title { get; set; } = string.Empty;
+        public int? ParentCommentId { get; set; }
         
-        // Navigation properties
-        public User User { get; set; } = null!;
-        public Post Post { get; set; } = null!;
-        public Comment? ParentComment { get; set; }
-        public List<Comment> Replies { get; set; } = new();
+        public virtual User User { get; set; } = null!;
+        public virtual Post Post { get; set; } = null!;
+        public virtual Comment? ParentComment { get; set; }
+        public virtual ICollection<Comment> Replies { get; set; } = new List<Comment>();
+        public virtual ICollection<CommentLike> Likes { get; set; } = new List<CommentLike>();
     }
 }

@@ -18,5 +18,6 @@ namespace NexusGram.DTOs
         public string ProfilePicture { get; set; } = string.Empty;
         public int LikeCount { get; set; }
         public int CommentCount { get; set; }
+        public bool IsLiked { get; set; }
     }
 }

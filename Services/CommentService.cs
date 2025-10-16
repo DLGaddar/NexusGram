@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using NexusGram.Data;
-using NexusGram.Models;
 using NexusGram.DTOs;
+using NexusGram.Models;
 
 namespace NexusGram.Services
 {
@@ -14,26 +14,34 @@ namespace NexusGram.Services
             _context = context;
         }
 
-        public async Task<Comment> AddCommentAsync(int userId, int postId, string content, int? parentCommentId = null)
+        public async Task<CommentResponse> AddCommentAsync(int userId, int postId, string content, int? parentCommentId = null)
         {
-            // Check if post exists
-            var post = await _context.Posts.FindAsync(postId);
-            if (post == null)
-                throw new Exception("Post not found");
+            // Validation
+            if (string.IsNullOrWhiteSpace(content))
+                throw new ArgumentException("Comment content cannot be empty");
 
-            // Check if parent comment exists (for replies)
+            if (content.Length > 500)
+                throw new ArgumentException("Comment cannot exceed 500 characters");
+
+            // Check if post exists
+            var postExists = await _context.Posts.AnyAsync(p => p.Id == postId);
+            if (!postExists)
+                throw new ArgumentException("Post not found");
+
+            // Check parent comment if replying
             if (parentCommentId.HasValue)
             {
-                var parentComment = await _context.Comments.FindAsync(parentCommentId.Value);
+                var parentComment = await _context.Comments
+                    .FirstOrDefaultAsync(c => c.Id == parentCommentId && c.PostId == postId);
                 if (parentComment == null)
-                    throw new Exception("Parent comment not found");
+                    throw new ArgumentException("Parent comment not found");
             }
 
             var comment = new Comment
             {
+                Content = content.Trim(),
                 UserId = userId,
                 PostId = postId,
-                Content = content,
                 ParentCommentId = parentCommentId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -42,82 +50,139 @@ namespace NexusGram.Services
             _context.Comments.Add(comment);
             await _context.SaveChangesAsync();
 
-            return comment;
+            // Yeni eklenen comment'i user bilgisiyle birlikte getir
+            var newComment = await _context.Comments
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == comment.Id);
+
+            return await MapToCommentResponse(newComment!, userId);
+        }
+
+        public async Task<List<CommentResponse>> GetCommentsByPostAsync(int postId, int? currentUserId = null)
+        {
+            var comments = await _context.Comments
+                .Include(c => c.User)
+                .Include(c => c.Likes)
+                .Include(c => c.Replies)
+                    .ThenInclude(r => r.User)
+                .Include(c => c.Replies)
+                    .ThenInclude(r => r.Likes)
+                .Where(c => c.PostId == postId && c.ParentCommentId == null)
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+
+            var response = new List<CommentResponse>();
+
+            foreach (var comment in comments)
+            {
+                response.Add(await MapToCommentResponse(comment, currentUserId));
+            }
+
+            return response;
         }
 
         public async Task<bool> DeleteCommentAsync(int commentId, int userId)
         {
             var comment = await _context.Comments
-                .FirstOrDefaultAsync(c => c.Id == commentId && c.UserId == userId);
+                .Include(c => c.Replies)
+                .FirstOrDefaultAsync(c => c.Id == commentId);
 
-            if (comment == null)
+            if (comment == null || comment.UserId != userId)
                 return false;
 
-            _context.Comments.Remove(comment);
-            await _context.SaveChangesAsync();
+            // If comment has replies, soft delete (just hide content)
+            if (comment.Replies.Any())
+            {
+                comment.Content = "[deleted]";
+                comment.UpdatedAt = DateTime.UtcNow;
+                _context.Comments.Update(comment);
+            }
+            else
+            {
+                _context.Comments.Remove(comment);
+            }
 
+            await _context.SaveChangesAsync();
             return true;
         }
 
-        public async Task<List<CommentResponse>> GetCommentsByPostAsync(int postId)
+        public async Task<bool> LikeCommentAsync(int commentId, int userId)
         {
-            var comments = await _context.Comments
-                .Where(c => c.PostId == postId)
-                .Include(c => c.User)
-                .Include(c => c.Replies)
-                    .ThenInclude(r => r.User)
-                .Where(c => c.ParentCommentId == null) // Only top-level comments
-                .OrderByDescending(c => c.CreatedAt)
-                .Select(c => new CommentResponse
-                {
-                    Id = c.Id,
-                    Content = c.Content,
-                    CreatedAt = c.CreatedAt,
-                    UserId = c.UserId,
-                    Username = c.User.Username,
-                    ProfilePicture = c.User.ProfilePicture,
-                    ParentCommentId = c.ParentCommentId,
-                    Replies = c.Replies.Select(r => new CommentResponse
-                    {
-                        Id = r.Id,
-                        Content = r.Content,
-                        CreatedAt = r.CreatedAt,
-                        UserId = r.UserId,
-                        Username = r.User.Username,
-                        ProfilePicture = r.User.ProfilePicture,
-                        ParentCommentId = r.ParentCommentId
-                    }).ToList()
-                })
-                .ToListAsync();
+            // Check if already liked
+            var existingLike = await _context.CommentLikes
+                .FirstOrDefaultAsync(cl => cl.CommentId == commentId && cl.UserId == userId);
 
-            return comments;
+            if (existingLike != null)
+                return false;
+
+            var like = new CommentLike
+            {
+                CommentId = commentId,
+                UserId = userId,
+                LikedAt = DateTime.UtcNow
+            };
+
+            _context.CommentLikes.Add(like);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
-        public async Task<CommentResponse> GetCommentAsync(int commentId)
+        public async Task<bool> UnlikeCommentAsync(int commentId, int userId)
         {
-            var comment = await _context.Comments
-                .Include(c => c.User)
-                .FirstOrDefaultAsync(c => c.Id == commentId);
+            var like = await _context.CommentLikes
+                .FirstOrDefaultAsync(cl => cl.CommentId == commentId && cl.UserId == userId);
 
-            if (comment == null)
-                throw new Exception("Comment not found");
+            if (like == null)
+                return false;
 
-            return new CommentResponse
+            _context.CommentLikes.Remove(like);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<int> GetCommentLikeCountAsync(int commentId)
+        {
+            return await _context.CommentLikes
+                .CountAsync(cl => cl.CommentId == commentId);
+        }
+
+        public async Task<bool> IsCommentLikedByUserAsync(int commentId, int userId)
+        {
+            return await _context.CommentLikes
+                .AnyAsync(cl => cl.CommentId == commentId && cl.UserId == userId);
+        }
+
+        private async Task<CommentResponse> MapToCommentResponse(Comment comment, int? currentUserId = null)
+        {
+            var likeCount = await GetCommentLikeCountAsync(comment.Id);
+            var isLiked = currentUserId.HasValue && await IsCommentLikedByUserAsync(comment.Id, currentUserId.Value);
+
+            var response = new CommentResponse
             {
                 Id = comment.Id,
                 Content = comment.Content,
                 CreatedAt = comment.CreatedAt,
+                UpdatedAt = comment.UpdatedAt,
                 UserId = comment.UserId,
-                Username = comment.User.Username,
-                ProfilePicture = comment.User.ProfilePicture,
-                ParentCommentId = comment.ParentCommentId
+                ParentCommentId = comment.ParentCommentId,
+                LikeCount = likeCount,
+                IsLikedByCurrentUser = isLiked,
+                User = new UserProfileDto
+                {
+                    Id = comment.User.Id.ToString(),
+                    UserName = comment.User.Username,
+                    ProfilePicture = comment.User.ProfilePicture ?? "/images/default-avatar.png"
+                },
+                Replies = new List<CommentResponse>()
             };
-        }
 
-        public async Task<int> GetCommentCountAsync(int postId)
-        {
-            return await _context.Comments
-                .CountAsync(c => c.PostId == postId);
+            // Map replies recursively
+            foreach (var reply in comment.Replies.OrderBy(r => r.CreatedAt))
+            {
+                response.Replies.Add(await MapToCommentResponse(reply, currentUserId));
+            }
+
+            return response;
         }
     }
 }

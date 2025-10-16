@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NexusGram")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+60a45dea632ea621df8199173608c9e60116730f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+742bde89a9665724b30b35a74ac179746a0b203c")]
 [assembly: System.Reflection.AssemblyProductAttribute("NexusGram")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NexusGram")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

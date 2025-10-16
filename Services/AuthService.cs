@@ -46,43 +46,72 @@ namespace NexusGram.Services
             return user;
         }
 
-        public async Task<User> LoginAsync(string username, string password)
+        public async Task<LoginResponse> LoginAsync(string username, string password)
         {
+            
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
             
-            if (user == null)
-                throw new Exception("User not found");
-
-            if (!_passwordHasher.VerifyPassword(password, user.PasswordHash))
-                throw new Exception("Invalid password");
-
-            return user;
-        }
-
-        public string GenerateJwtToken(User user)
-        {
-            var jwtKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY") 
-                         ?? "BackupSuperSecretKeyForDevelopmentOnly123";
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(jwtKey);
-
-            var tokenDescriptor = new SecurityTokenDescriptor
+            if (user == null || !_passwordHasher.VerifyPassword(password, user.PasswordHash))
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new Claim(ClaimTypes.Name, user.Username),
-                    new Claim(ClaimTypes.Email, user.Email)
-                }),
-                Expires = DateTime.UtcNow.AddDays(7),
-                Issuer = _configuration["Jwt:Issuer"],
-                Audience = _configuration["Jwt:Audience"],
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                throw new UnauthorizedAccessException("Invalid credentials");
+            }
+        
+            var token = GenerateJwtToken(user);
+            
+            return new LoginResponse
+            {
+                Token = token,
+                Message = "Login successful", 
+                Username = user.Username,
+                Email = user.Email,
+                ProfilePicture = user.ProfilePicture,
+                UserId = user.Id
             };
-
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
         }
+
+public string GenerateJwtToken(User user)
+{
+    var tokenHandler = new JwtSecurityTokenHandler();
+    
+    var keyString = _configuration["Jwt:Key"] ?? 
+                    throw new InvalidOperationException("JWT Secret Key is not configured.");
+    
+    var key = Encoding.UTF8.GetBytes(keyString);
+
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity(new[]
+        {
+           new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+           new Claim("unique_name", user.Username),
+           new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+           new Claim(ClaimTypes.Email, user.Email),
+           new Claim(ClaimTypes.Name, user.Username)
+        }),
+        Expires = DateTime.UtcNow.AddHours(3),
+        Issuer = _configuration["Jwt:Issuer"],
+        Audience = _configuration["Jwt:Audience"],
+        
+        // 🚨 KRİTİK KONTROL: SigningCredentials
+        SigningCredentials = new SigningCredentials(
+            new SymmetricSecurityKey(key), 
+            SecurityAlgorithms.HmacSha256Signature // 👈 Algoritmanın doğru ayarlandığından emin olun!
+        )
+    };
+
+    var token = tokenHandler.CreateToken(tokenDescriptor);
+    return tokenHandler.WriteToken(token);
+}
+    }
+
+    // Yeni Response Model
+    public class LoginResponse
+    {
+    public required string Token { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public required string Username { get; set; }
+    public required string Email { get; set; }
+    public string? ProfilePicture { get; set; }
+    public int UserId { get; set; }
     }
 }

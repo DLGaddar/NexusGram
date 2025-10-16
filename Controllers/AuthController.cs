@@ -45,23 +45,12 @@ namespace NexusGram.Controllers
         {
             try
             {
-                var user = await _authService.LoginAsync(request.Username, request.Password);
-                var token = _authService.GenerateJwtToken(user);
-
-                var response = new AuthResponse
-                {
-                    UserId = user.Id,
-                    Username = user.Username,
-                    Email = user.Email,
-                    Token = token,
-                    ProfilePicture = user.ProfilePicture
-                };
-
-                return Ok(response);
+                var result = await _authService.LoginAsync(request.Username, request.Password);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return BadRequest(new { message = ex.Message });
             }
         }
     }

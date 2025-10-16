@@ -14,8 +14,8 @@ namespace NexusGram.Data
         public DbSet<Follow> Follows { get; set; }
         public DbSet<Story> Stories { get; set; }
         public DbSet<Notification> Notifications { get; set; }
-        
-        
+        public DbSet<CommentLike> CommentLikes { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // User configuration
@@ -49,7 +49,7 @@ namespace NexusGram.Data
                 .HasOne(l => l.User)
                 .WithMany(u => u.Likes)
                 .HasForeignKey(l => l.UserId)
-                .OnDelete(DeleteBehavior.Restrict); // ✅ CASCADE → RESTRICT
+                .OnDelete(DeleteBehavior.Restrict);
                 
             modelBuilder.Entity<Like>()
                 .HasOne(l => l.Post)
@@ -61,12 +61,12 @@ namespace NexusGram.Data
                 .HasIndex(l => new { l.UserId, l.PostId })
                 .IsUnique();
                 
-            // Comment relationships - CRITICAL FIX
+            // Comment relationships
             modelBuilder.Entity<Comment>()
                 .HasOne(c => c.User)
                 .WithMany(u => u.Comments)
                 .HasForeignKey(c => c.UserId)
-                .OnDelete(DeleteBehavior.Restrict); // ✅ CASCADE → RESTRICT
+                .OnDelete(DeleteBehavior.Restrict);
                 
             modelBuilder.Entity<Comment>()
                 .HasOne(c => c.Post)
@@ -106,6 +106,25 @@ namespace NexusGram.Data
                 .WithMany()
                 .HasForeignKey(n => n.ActorId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // 🔥 COMMENTLIKE CONFIGURATION DÜZELTMESİ - CASCADE HATASI ÇÖZÜMÜ
+            modelBuilder.Entity<CommentLike>(entity =>
+            {
+                entity.HasKey(cl => cl.Id);
+                
+                entity.HasOne(cl => cl.Comment)
+                    .WithMany(c => c.Likes)
+                    .HasForeignKey(cl => cl.CommentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                    
+                entity.HasOne(cl => cl.User)
+                    .WithMany(u => u.CommentLikes)
+                    .HasForeignKey(cl => cl.UserId)
+                    .OnDelete(DeleteBehavior.Restrict); // 🔥 CASCADE → RESTRICT (CRITICAL FIX)
+                    
+                entity.HasIndex(cl => new { cl.CommentId, cl.UserId })
+                    .IsUnique();
+            });
         }
     }
 }
