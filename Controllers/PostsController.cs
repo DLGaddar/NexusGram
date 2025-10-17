@@ -23,13 +23,33 @@ namespace NexusGram.Controllers
             _context = context;
         }
 
+        private int GetUserIdFromClaims()
+        {
+            // JwtRegisteredClaimNames.Sub claim'ini en güvenilir şekilde çek.
+            var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+        
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+            {
+                // [Authorize] olduğu için bu durumun oluşması yetkilendirme hatası demektir.
+                throw new UnauthorizedAccessException("Yetkilendirme kimliği bulunamadı.");
+            }
+            return userId;
+        }
+
         [HttpPost]
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<PostResponse>> CreatePost([FromForm] CreatePostFormRequest request)
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    // Bu kod normalde çalışmamalı, çünkü [Authorize] var.
+                    // Ancak her ihtimale karşı:
+                    return Unauthorized(new { message = "Geçersiz kimlik bilgisi. Giriş yapın." });
+                }
                 
                 var createRequest = new CreatePostRequest
                 {
@@ -62,14 +82,18 @@ namespace NexusGram.Controllers
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    // Bu kod normalde çalışmamalı, çünkü [Authorize] var.
+                    // Ancak her ihtimale karşı:
+                    return Unauthorized(new { message = "Geçersiz kimlik bilgisi. Giriş yapın." });
+                }
                 
                 // 🚨 Artık page ve pageSize parametrelerini kullanıyoruz
                 var posts = await _postService.GetFeedAsync(userId, page, pageSize); 
                 
-                // DİKKAT: Frontend'in PaginatedResponse objesine dönmesi için 
-                // buradaki geri dönüş tipini kontrol edin veya DTO kullanın.
-                // Şimdilik sadece posts listesini döndürdüğünüzü varsayıyorum.
                 return Ok(posts); 
             }
             catch (Exception ex)
@@ -98,7 +122,7 @@ namespace NexusGram.Controllers
         {
             try
             {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var userId = GetUserIdFromClaims();
                 var result = await _postService.DeletePostAsync(postId, userId);
                 
                 if (!result)

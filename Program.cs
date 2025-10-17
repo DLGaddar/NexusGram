@@ -9,6 +9,7 @@ using NexusGram.Services;
 using NexusGram.Hubs;
 using System.Security.Cryptography; // Hata ayıklama için kullanılabilir
 
+JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -85,12 +86,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
+            NameClaimType = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
+            RoleClaimType = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role",
             // Değerleri appsettings.json'dan çekiyoruz
             ValidIssuer = builder.Configuration["Jwt:Issuer"], 
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(key),
             ClockSkew = TimeSpan.FromSeconds(5)
         };
+        options.MapInboundClaims = false;
         
         // Hata ayıklama için tokenın ne zaman expired olduğunu görmenizi sağlayabilir.
         // options.Events = new JwtBearerEvents

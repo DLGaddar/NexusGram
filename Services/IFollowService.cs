@@ -1,4 +1,5 @@
 using NexusGram.DTOs;
+using NexusGram.Services;
 
 namespace NexusGram.Services
 {
@@ -7,8 +8,8 @@ namespace NexusGram.Services
         Task<bool> FollowUserAsync(int followerId, int followingId);
         Task<bool> UnfollowUserAsync(int followerId, int followingId);
         Task<bool> IsFollowingAsync(int followerId, int followingId);
-        Task<List<UserProfileResponse>> GetFollowersAsync(int userId);
-        Task<List<UserProfileResponse>> GetFollowingAsync(int userId);
+        Task<List<UserProfileResponse>> GetFollowersAsync(int userId, int requestingUserId);
+        Task<List<UserProfileResponse>> GetFollowingAsync(int userId, int requestingUserId);
         Task<int> GetFollowerCountAsync(int userId);
         Task<int> GetFollowingCountAsync(int userId);
     }
