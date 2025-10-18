@@ -6,6 +6,7 @@ using NexusGram.DTOs;
 using NexusGram.Models;
 using NexusGram.Services;
 using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace NexusGram.Controllers
 {
@@ -16,11 +17,13 @@ namespace NexusGram.Controllers
     {
         private readonly IPostService _postService;
         private readonly ApplicationDbContext _context;
+        private readonly IJwtService _jwtService;
 
-        public PostsController(IPostService postService, ApplicationDbContext context)
+        public PostsController(IPostService postService, ApplicationDbContext context, IJwtService jwtService)
         {
             _postService = postService;
             _context = context;
+            _jwtService = jwtService;
         }
 
         private int GetUserIdFromClaims()
@@ -82,23 +85,27 @@ namespace NexusGram.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
-
-                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+                Console.WriteLine("=== FEED REQUEST ===");
+                
+                var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+                if (authHeader != null && authHeader.StartsWith("Bearer "))
                 {
-                    // Bu kod normalde çalışmamalı, çünkü [Authorize] var.
-                    // Ancak her ihtimale karşı:
-                    return Unauthorized(new { message = "Geçersiz kimlik bilgisi. Giriş yapın." });
+                    var token = authHeader.Substring("Bearer ".Length).Trim();
+                    var userId = _jwtService.GetUserIdFromToken(token);
+                    Console.WriteLine($"✅ User ID from token: {userId}");
+                    
+                    var posts = await _postService.GetFeedAsync(userId, page, pageSize); 
+                    Console.WriteLine($"✅ Posts found: {posts.Count}");
+                    return Ok(posts);
                 }
-                
-                // 🚨 Artık page ve pageSize parametrelerini kullanıyoruz
-                var posts = await _postService.GetFeedAsync(userId, page, pageSize); 
-                
-                return Ok(posts); 
+        
+                // Bearer yoksa hata ver
+                Console.WriteLine("❌ No Bearer token found");
+                return Unauthorized(new { message = "Bearer token required" });
             }
             catch (Exception ex)
             {
-                // ...
+                Console.WriteLine($"❌ FEED ERROR: {ex.Message}");
                 return BadRequest(new { message = ex.Message });
             }
         }

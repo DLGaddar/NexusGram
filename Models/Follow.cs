@@ -10,7 +10,7 @@ namespace NexusGram.Models
         
         // Foreign keys
         public int FollowerId { get; set; } // Takip eden
-        public int FollowingId { get; set; } = null!; // Takip edilen
+        public int FollowingId { get; set; } // Takip edilen
         
         // Navigation properties
         public User Follower { get; set; } = null!;

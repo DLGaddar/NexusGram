@@ -13,12 +13,14 @@ namespace NexusGram.Services
         private readonly ApplicationDbContext _context;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IConfiguration _configuration;
+        private readonly IJwtService _jwtService;
 
-        public AuthService(ApplicationDbContext context, IPasswordHasher passwordHasher, IConfiguration configuration)
+        public AuthService(ApplicationDbContext context, IPasswordHasher passwordHasher, IConfiguration configuration, IJwtService jwtService)
         {
             _context = context;
             _passwordHasher = passwordHasher;
             _configuration = configuration;
+            _jwtService = jwtService;
         }
 
         public async Task<User> RegisterAsync(string username, string email, string password)
@@ -42,6 +44,8 @@ namespace NexusGram.Services
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+            
+            var jwtToken = _jwtService.GenerateToken(user.Id, user.Username);
 
             return user;
         }
@@ -57,7 +61,7 @@ namespace NexusGram.Services
             }
         
             var token = GenerateJwtToken(user);
-            
+            var jwtToken = _jwtService.GenerateToken(user.Id, user.Username);
             return new LoginResponse
             {
                 Token = token,
@@ -94,16 +98,5 @@ public string GenerateJwtToken(User user)
     var token = tokenHandler.CreateToken(tokenDescriptor);
     return tokenHandler.WriteToken(token);
 }
-    }
-
-    // Yeni Response Model
-    public class LoginResponse
-    {
-    public required string Token { get; set; }
-    public string Message { get; set; } = string.Empty;
-    public required string Username { get; set; }
-    public required string Email { get; set; }
-    public string? ProfilePicture { get; set; }
-    public int UserId { get; set; }
     }
 }

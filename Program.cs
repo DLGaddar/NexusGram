@@ -74,49 +74,37 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // 1. Anahtar Ayarını appsettings.json'daki 'Jwt:Key' ile eşleştiriyoruz.
         var key = Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? 
-                                         throw new InvalidOperationException("JWT Secret Key is not configured. Check 'Jwt:Key' in appsettings.json."));
+        throw new InvalidOperationException("JWT Secret Key is not configured. Check 'Jwt:Key' in appsettings.json."));
         
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            // Tüm kontrolleri aktif ediyoruz
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            // ✅ .NET 9'da MapInboundClaims farklı - bu satırları kullan:
+            ValidateIssuer = true,  // ✅ true yap
+            ValidateAudience = true, // ✅ true yap
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
-            NameClaimType = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier",
-            RoleClaimType = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role",
-            // Değerleri appsettings.json'dan çekiyoruz
+            // ✅ CLAIM TYPES - Doğru ayarlar
+            NameClaimType = JwtRegisteredClaimNames.Sub,
+            RoleClaimType = "role",
+            
+            // Değerleri appsettings.json'dan çek
             ValidIssuer = builder.Configuration["Jwt:Issuer"], 
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(key),
-            ClockSkew = TimeSpan.FromSeconds(5)
+            ClockSkew = TimeSpan.Zero
         };
-        options.MapInboundClaims = false;
         
-        // Hata ayıklama için tokenın ne zaman expired olduğunu görmenizi sağlayabilir.
-        // options.Events = new JwtBearerEvents
-        // {
-        //     OnAuthenticationFailed = context =>
-        //     {
-        //         if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
-        //         {
-        //             context.Response.Headers.Add("Token-Expired", "true");
-        //         }
-        //         return Task.CompletedTask;
-        //     }
-        // };
+        // ✅ .NET 9'da claim mapping için bu ayarı kullan:
+        options.MapInboundClaims = false; // JWT standart claim'leri kullan
     });
 
-// --------------------------------------------------------------------------------
-// DI Servisleri
-// --------------------------------------------------------------------------------
-
-builder.Services.AddAuthorization(); // Yetkilendirme servisi (AddAuthentication'dan sonra olmalı)
+builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<ILikeService, LikeService>();

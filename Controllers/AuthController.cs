@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using NexusGram.DTOs;
+using NexusGram.Models;
 using NexusGram.Services;
 
 namespace NexusGram.Controllers
@@ -8,45 +8,63 @@ namespace NexusGram.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
-        private readonly IAuthService _authService;
+        private readonly IUserService _userService;
+        private readonly IJwtService _jwtService;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IUserService userService, IJwtService jwtService)
         {
-            _authService = authService;
+            _userService = userService;
+            _jwtService = jwtService;
         }
 
-        [HttpPost("register")]
-        public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
+        [HttpPost("login")]
+        public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
         {
             try
             {
-                var user = await _authService.RegisterAsync(request.Username, request.Email, request.Password);
-                var token = _authService.GenerateJwtToken(user);
+                Console.WriteLine($"🔐 LOGIN ATTEMPT: {request.Username}");
+                
+                var user = await _userService.AuthenticateAsync(request.Username, request.Password);
+                if (user == null)
+                    return Unauthorized(new { message = "Invalid credentials" });
 
-                var response = new AuthResponse
-                {
+                var token = _jwtService.GenerateToken(user.Id, user.Username);
+                
+                Console.WriteLine($"🔐 LOGIN SUCCESS - UserId: {user.Id}, Token: {token.Substring(0, 50)}...");
+                
+                return Ok(new LoginResponse 
+                { 
+                    Token = token,
                     UserId = user.Id,
                     Username = user.Username,
-                    Email = user.Email,
-                    Token = token,
-                    ProfilePicture = user.ProfilePicture
-                };
-
-                return Ok(response);
+                    Email = user.Email
+                });
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"❌ LOGIN ERROR: {ex.Message}");
                 return BadRequest(new { message = ex.Message });
             }
         }
 
-        [HttpPost("login")]
-        public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
+        [HttpPost("register")]
+        public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
         {
             try
             {
-                var result = await _authService.LoginAsync(request.Username, request.Password);
-                return Ok(result);
+                var user = await _userService.RegisterAsync(request.Username, request.Email, request.Password);
+                if (user == null)
+                    return BadRequest(new { message = "Username or email already exists" });
+
+                var token = _jwtService.GenerateToken(user.Id, user.Username);
+                
+                return Ok(new RegisterResponse
+                {
+                    Token = token,
+                    UserId = user.Id,
+                    Username = user.Username,
+                    Email = user.Email
+                });
             }
             catch (Exception ex)
             {
